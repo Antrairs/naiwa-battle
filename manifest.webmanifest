@@ -1,0 +1,11 @@
+{
+  "name": "嘉年华炸弹对战",
+  "short_name": "BOMBO",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#83c7c1",
+  "theme_color": "#24594f"
+}

@@ -1,0 +1,10 @@
+[
+  {
+    "unique_name": "factory-floor",
+    "prompt": "Use case: stylized-concept. Asset type: seamless game environment floor albedo texture, square. Input image 1 is a STYLE REFERENCE ONLY from a whimsical milk factory game: rounded yellow machinery, ivory milk, teal sky and lush green. Create a NEW square top-down orthographic material texture for the walkable floor of a 3D overhead combat arena in that same soft, polished toy-like industrial style. Large muted sage-teal painted metal floor plates, shallow clean panel seams, very subtle wear, sparse small round rivets, a little ivory enamel. Quiet low-contrast surface so yellow characters and bright bullets remain readable. Seamless repeating in both axes. Flat evenly lit diffuse color, no perspective, no baked shadows, no objects, no characters, no plants, no words, no labels, no watermark. Fill the image edge to edge with the material. Color balance: primarily desaturated light sage-teal, not yellow or brown."
+  },
+  {
+    "unique_name": "factory-panel",
+    "prompt": "Use case: stylized-concept. Asset type: seamless square machinery panel albedo texture for 3D cover obstacles. Input image 1 is a STYLE REFERENCE ONLY: a cheerful milk factory with golden pipes, ivory milk drips and chunky bolted metal. Create a NEW square flat front-on repeating golden-yellow enamel machine panel texture in that same polished rounded stylized 3D game aesthetic. Four large square panels in a 2 by 2 arrangement, fine recessed dark ochre seams, chunky warm ivory bolted corner brackets, a few small clean ivory milk drips along the upper edges, subtle brushed enamel finish. Panels should be simple readable from an overhead camera, moderately saturated butter-yellow with pale ivory details and muted olive seam accents. Seamless repeating on both axes; only the surface itself, even diffuse lighting, no perspective, no cast shadows, no frame around the image, no floating objects, no characters, no words, no labels, no watermark. Edge to edge material."
+  }
+]

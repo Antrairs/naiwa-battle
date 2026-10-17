@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#e6eee9">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="BOMBO">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <title>嘉年华 · 炸弹对战</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%23f7c84f'/%3E%3Ccircle cx='20' cy='22' r='10' fill='%232b4641'/%3E%3Cpath d='M24 14q0-8 7-7' stroke='%232b4641' fill='none' stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="preload" as="image" href="/assets/entry/carnival-entry.webp?v=character2">
+  <link rel="stylesheet" href="/styles.css?v=20261017-entry">
+  <script type="importmap">{"imports":{"three":"/vendor/three/build/three.module.js","three/addons/":"/vendor/three/examples/jsm/"}}</script>
+</head>
+<body class="at-home">
+  <main id="app">
+    <section id="entry-screen" aria-label="游戏大厅" aria-busy="true">
+      <img id="entry-art" src="/assets/entry/carnival-entry.webp?v=character2" alt="黄色榴弹手站在笑脸储罐旁的原创工厂场景" fetchpriority="high">
+      <div class="entry-shade"></div>
+      <nav class="entry-tools"><button class="icon-button" data-fullscreen title="进入全屏" aria-label="进入全屏" aria-pressed="false"><i data-lucide="maximize"></i></button></nav>
+      <header class="entry-heading"><span class="entry-kicker">BOMBO / 2V2</span><h1>嘉年华<span>炸弹对战</span></h1></header>
+      <div id="entry-loading" class="entry-loading" role="status" aria-live="polite"><div class="load-label"><span id="loading-message">正在装配竞技场…</span><b id="loading-percent">0%</b></div><progress id="loading-progress" max="4" value="0" aria-label="游戏加载进度"></progress><button id="loading-retry" class="button light hidden">重新加载<i data-lucide="rotate-ccw"></i></button></div>
+      <div id="mode-picker" class="mode-picker hidden" aria-label="选择对战模式">
+        <button id="mode-training" class="mode-button training"><i data-lucide="bot"></i><span>人机对战<small>单人 · 2V2</small></span><i data-lucide="arrow-up-right"></i></button>
+        <button id="mode-friends" class="mode-button friends"><i data-lucide="users-round"></i><span>好友联机对战<small>好友房间 · 2V2</small></span><i data-lucide="arrow-up-right"></i></button>
+      </div>
+    </section>
+    <canvas id="arena" aria-label="3D 嘉年华炸弹竞技场"></canvas>
+    <div id="labels" aria-hidden="true"></div><div id="flash"></div>
+    <header class="topbar">
+      <div class="brand" aria-label="嘉年华炸弹对战"><span class="brand-bomb"><i data-lucide="bomb"></i></span><div><strong>BOMBO</strong><small>嘉年华 · 炸弹对战</small></div></div>
+      <div class="matchboard"><div class="team blue"><b id="blue-alive">2</b><span>蓝莓队<i class="team-dots" id="blue-dots"></i></span></div><div class="clock-block"><span id="mode-label">训练场 · 2V2</span><strong id="clock">10:00</strong><small id="round-label">ROUND 01</small></div><div class="team red"><span>红柚队<i class="team-dots" id="red-dots"></i></span><b id="red-alive">2</b></div></div>
+      <nav class="top-actions"><button class="icon-button" data-fullscreen title="进入全屏" aria-label="进入全屏" aria-pressed="false"><i data-lucide="maximize"></i></button><button id="home-button" class="icon-button" title="返回大厅" aria-label="返回大厅"><i data-lucide="house"></i></button><button id="network-button" class="button light" title="联机房间"><i data-lucide="users-round"></i><span>好友对战</span></button><button id="sound-button" class="icon-button" title="开启声音" aria-label="开启声音"><i data-lucide="volume-x"></i></button><button id="pause-button" class="icon-button" title="暂停与设置" aria-label="暂停与设置"><i data-lucide="pause"></i></button></nav>
+    </header>
+    <div class="objective"><span class="gold-icon"><i data-lucide="sparkles"></i></span><div><b id="loot-title">中央补给</b><span id="loot-timer">00:45</span></div></div>
+    <aside id="feed" aria-live="polite"></aside><aside id="mini-map"><canvas id="mini-canvas" width="280" height="160"></canvas></aside>
+    <div id="countdown" class="countdown hidden"><span>准备就绪</span><strong>3</strong><small id="count-team">蓝莓队</small></div>
+    <div id="spectate" class="spectate hidden"><i data-lucide="eye"></i><span>正在观战 · 队友仍在战斗</span></div>
+    <div id="connection" class="connection hidden"><span class="spinner"></span><span>正在连接竞技场…</span><button id="retry" class="button light hidden">重新连接</button></div>
+    <footer class="bottom-hud">
+      <div class="player-status"><div class="portrait"><div class="portrait-face"><i></i><i></i><span></span></div></div><div class="status-copy"><div><b id="local-name">球球</b><span id="local-team">蓝莓队 · 你</span></div><div class="hp-track"><span id="local-hp-fill"></span><i id="shield-fill"></i></div><div class="status-numbers"><span id="local-hp">100 <em>/ 100</em></span><span id="buff-text">榴弹发射器</span></div></div></div>
+      <div id="joystick"><div class="joystick-base"><div class="joystick-knob"></div></div></div>
+      <div class="skills">
+        <button class="skill skill-line" data-skill="1" title="散弹齐射 · 5 发 × 8 伤害 · 5 秒冷却" aria-label="散弹齐射"><span class="skill-disc"><i data-lucide="list-filter"></i><span class="cooldown-wipe"></span><b class="cooldown-text"></b><kbd>1</kbd></span><strong>散弹</strong></button>
+        <button class="skill skill-dash" data-skill="2" title="闪步 · 移动方向 3 格 · 6 秒冷却" aria-label="闪步"><span class="skill-disc"><i data-lucide="wind"></i><span class="cooldown-wipe"></span><b class="cooldown-text"></b><kbd>2</kbd></span><strong>闪步</strong></button>
+        <button class="skill skill-lob" data-skill="3" title="抛物榴弹 · 中心 35 伤害 · 9 秒冷却" aria-label="抛物榴弹"><span class="skill-disc"><i data-lucide="bomb"></i><span class="cooldown-wipe"></span><b class="cooldown-text"></b><kbd>3</kbd></span><strong>榴弹</strong></button>
+        <button class="skill skill-basic" data-skill="0" title="普攻 · 8 伤害 · 按住连发，拖动调整射击方向" aria-label="普攻"><span class="skill-disc"><i data-lucide="crosshair"></i><span class="cooldown-wipe"></span><b class="cooldown-text"></b><kbd>F</kbd></span><strong>普攻</strong></button>
+      </div>
+    </footer>
+    <div id="drag-feedback" class="hidden" aria-hidden="true"></div>
+    <div id="toast" role="status"></div>
+    <div id="rotate-prompt" hidden role="status"><i data-lucide="smartphone"></i><strong>请横屏对战</strong><span>旋转手机，进入竞技场</span><button class="icon-button" data-fullscreen title="进入全屏" aria-label="进入全屏" aria-pressed="false"><i data-lucide="maximize"></i></button></div>
+    <div id="room-modal" class="modal hidden"><section class="dialog room-dialog"><button class="dialog-close icon-button" data-close="room-modal" title="关闭"><i data-lucide="x"></i></button><span class="eyebrow">PLAY TOGETHER</span><h1>好友集合，开炸。</h1><div id="room-entry"><label class="field-label" for="nickname">你的昵称</label><input id="nickname" maxlength="12" value="球球" autocomplete="nickname"><button id="create-room" class="button primary wide"><i data-lucide="plus"></i>创建房间</button><div class="divider"><span>或加入好友</span></div><div class="join-row"><input id="room-code" maxlength="4" placeholder="4 位房间码" aria-label="房间码" autocomplete="off"><button id="join-room" class="button light">加入<i data-lucide="arrow-right"></i></button></div><p id="room-error" class="error" role="alert"></p></div><div id="room-lobby" class="hidden"><div class="room-code-label">房间码 <button id="copy-code" class="icon-button" title="复制房间码"><i data-lucide="copy"></i></button></div><strong id="display-code"></strong><div id="room-members"></div><div class="lobby-actions"><button id="fill-bots" class="button light wide"><i data-lucide="bot"></i>补齐训练伙伴</button><button id="start-match" class="button primary wide"><i data-lucide="play"></i>开始对战</button><button id="leave-room" class="text-button">离开房间，返回训练场</button></div></div><details id="lan-details"><summary><i data-lucide="wifi"></i>现场手机入口</summary><div id="lan-links"></div><img id="qr" alt="手机访问二维码" class="hidden"></details></section></div>
+    <div id="settings-modal" class="modal hidden"><section class="dialog settings-dialog"><button class="dialog-close icon-button" data-close="settings-modal" title="关闭"><i data-lucide="x"></i></button><span class="eyebrow">TAKE A BREATH</span><h1 id="settings-title">稍作休息</h1><label class="setting-row"><span><i data-lucide="volume-2"></i>总音量</span><input id="volume" type="range" min="0" max="100" value="45" aria-label="总音量"></label><label class="setting-row"><span><i data-lucide="music-2"></i>背景音乐</span><input id="music-volume" type="range" min="0" max="100" value="28" aria-label="背景音乐音量"></label><div class="setting-row"><span><i data-lucide="sparkles"></i>画面</span><div class="segmented"><button data-quality="standard">流畅</button><button data-quality="high" class="selected">精细</button></div></div><button id="resume-button" class="button primary wide"><i data-lucide="play"></i>继续对战</button><button id="new-training" class="button light wide"><i data-lucide="rotate-ccw"></i>重新训练</button></section></div>
+    <div id="result-modal" class="modal hidden"><section class="dialog result-dialog"><div id="result-medal"><i data-lucide="trophy"></i></div><span class="eyebrow">ROUND COMPLETE</span><h1 id="result-heading">蓝莓队胜利</h1><p id="result-reason"></p><div id="result-players"></div><div id="mvp"></div><button id="rematch" class="button primary wide"><i data-lucide="rotate-ccw"></i><span>再来一局</span></button><button id="result-training" class="text-button">返回训练场</button></section></div>
+    <div id="fatal" class="modal hidden"><section class="dialog"><h1>竞技场暂未加载</h1><p id="fatal-message"></p><button onclick="location.reload()" class="button primary wide">重新加载</button></section></div>
+  </main>
+  <script src="/socket.io/socket.io.js"></script><script src="/vendor/lucide/dist/umd/lucide.min.js"></script><script type="module" src="/main.js?v=20261017-entry"></script>
+</body>
+</html>

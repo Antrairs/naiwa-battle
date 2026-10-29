@@ -40,16 +40,14 @@ function summary(room) {
 }
 function lobby(room) { io.to(room.code).emit('room', summary(room)); }
 function broadcastSnapshot(room) {
+  const recipients = io.to(room.code);
   const snapshot = room.match.snapshot(room.lastEventSent);
   snapshot.room = room.code;
   room.lastEventSent = room.match.seq;
-  if (snapshot.events.length) io.to(room.code).emit('events', { room: room.code, events: snapshot.events });
+  if (snapshot.events.length) recipients.emit('events', { room: room.code, events: snapshot.events });
   snapshot.events = [];
   if (snapshot.state === 'result') room.resultSent = true;
-  for (const player of room.members.values()) {
-    const socket = io.sockets.sockets.get(player.id);
-    if (socket) (snapshot.state === 'result' || snapshot.paused ? socket : socket.volatile).emit('snapshot', snapshot);
-  }
+  (snapshot.state === 'result' || snapshot.paused ? recipients : recipients.volatile).emit('snapshot', snapshot);
 }
 function leave(socket) {
   const room = rooms.get(socket.data.room);

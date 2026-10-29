@@ -22,7 +22,7 @@ let nickname = '球球';
 try { nickname = localStorage.getItem('bombo-name') || nickname; } catch {}
 $('#nickname').value = nickname;
 const input = { keys: new Set(), stick: { x: 0, z: 0 }, aim: { x: 0, z: 0 }, pointer: { x: 0, y: 0 }, hasPointer: false, skill: 0, activeTouch: null, fire: null, guide: false };
-const pendingSkills = new Set(), readyAt = {};
+const pendingSkills = new Set(), pendingEvents = [], readyAt = {};
 const state = { snapshot: null, localId: '', room: null, lastEvent: 0, lastRound: 0, lastSnapshot: 0, resultShown: false, connected: false, modalPause: false, screen: 'home', loading: true, busy: false };
 state.latency = 0;
 let toastTimer, sendTimer = 0, hudTimer = 0, frameCount = 0, stickPointer = null;
@@ -83,7 +83,7 @@ function resetInput() {
   $$('.skill').forEach(b => { b.classList.remove('aiming'); b.style.removeProperty('--drag-x'); b.style.removeProperty('--drag-y'); });
   $('#drag-feedback').classList.add('hidden'); $('.joystick-knob').style.transform = ''; sendInput();
 }
-function clearMatch() { resetInput(); audio.setPaused(true); pendingSkills.clear(); for (const key of Object.keys(readyAt)) delete readyAt[key]; view.reset(); motion.reset(); state.snapshot = null; state.lastEvent = 0; state.lastRound = 0; state.resultShown = false; $('#feed').replaceChildren(); $('#result-modal').classList.add('hidden'); }
+function clearMatch() { resetInput(); audio.setPaused(true); pendingSkills.clear(); pendingEvents.length = 0; for (const key of Object.keys(readyAt)) delete readyAt[key]; view.reset(); motion.reset(); state.snapshot = null; state.lastEvent = 0; state.lastRound = 0; state.resultShown = false; $('#feed').replaceChildren(); $('#result-modal').classList.add('hidden'); }
 function request(event, data = {}) { return new Promise(resolve => socket.timeout(7000).emit(event, data, (error, response) => resolve(error ? { ok: false, error: '连接超时，请重试' } : response || { ok: true }))); }
 
 const socket = window.io({ reconnection: true, reconnectionDelay: 500, reconnectionDelayMax: 2000 });
@@ -100,9 +100,16 @@ socket.on('connect', async () => {
 socket.on('connect_error', () => { updateEntry(); $('#connection').classList.remove('hidden'); $('#connection>span:nth-child(2)').textContent = '竞技场连接中，请稍候…'; $('#retry').classList.remove('hidden'); });
 socket.on('disconnect', () => { state.connected = false; state.reconnecting = true; updateEntry(); audio.setPaused(true); $('#connection').classList.remove('hidden'); $('#connection>span:nth-child(2)').textContent = '连接已断开，正在重连…'; resetInput(); });
 $('#retry').addEventListener('click', () => { socket.connect(); $('#retry').classList.add('hidden'); });
-socket.on('room', room => { state.room = room; updateLobby(); });
-socket.on('snapshot', snapshot => {
-  if (state.screen === 'home') return;
+socket.on('room', room => {
+  if (state.room?.code !== room.code) pendingEvents.length = 0;
+  state.room = room; updateLobby();
+});
+socket.on('events', packet => {
+  if (packet.room === state.room?.code) pendingEvents.push(...packet.events);
+});
+socket.on('snapshot', (snapshot, ack) => {
+  if (state.screen === 'home' || snapshot.room !== state.room?.code) { ack?.(); return; }
+  snapshot.events = pendingEvents.splice(0);
   if (state.screen === 'friends' && !snapshot.training) enterBattle();
   const roundChanged = snapshot.round !== state.lastRound;
   if (roundChanged) {
@@ -126,6 +133,7 @@ socket.on('snapshot', snapshot => {
     handleEvent(event, snapshot);
   }
   if (snapshot.state === 'result' && !state.resultShown) showResult();
+  ack?.();
 });
 
 function handleEvent(event, snapshot) {

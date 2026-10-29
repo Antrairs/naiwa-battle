@@ -17,15 +17,21 @@ const unit = (x, z) => { const d = Math.max(0.01, Math.hypot(x, z)); return { x:
 
 try {
   const group = await Promise.all(Array.from({ length: 4 }, connect));
-  let resultSnapshots = 0;
+  let resultSnapshots = 0, snapshotsWithEvents = false;
   const seenEvents = new Set(), duplicateEvents = new Set();
-  group[0].on('snapshot', s => {
-    snapshot = s;
-    if (s.state === 'result') resultSnapshots++;
-    for (const event of s.events) {
+  const eventRooms = new Set();
+  group[0].on('events', packet => {
+    eventRooms.add(packet.room);
+    for (const event of packet.events) {
       if (seenEvents.has(event.id)) duplicateEvents.add(event.id);
       seenEvents.add(event.id);
     }
+  });
+  group[0].on('snapshot', (s, ack) => {
+    snapshot = s;
+    if (s.state === 'result') resultSnapshots++;
+    if (s.events.length) snapshotsWithEvents = true;
+    ack();
   });
   const room = await request(group[0], 'create', { name: '流程一' });
   for (let i = 1; i < 4; i++) await request(group[i], 'join', { code: room.room.code, name: '流程' + (i + 1) });
@@ -63,6 +69,9 @@ try {
   await sleep(200);
   assert.equal(resultSnapshots, 1);
   assert.deepEqual([...duplicateEvents], []);
+  assert.ok(seenEvents.size > 0);
+  assert.deepEqual([...eventRooms], [room.room.code]);
+  assert.equal(snapshotsWithEvents, false);
   for (let i = 0; i < 3; i++) await request(group[i], 'rematch');
   await sleep(250);
   assert.equal(snapshot.state, 'result');
@@ -70,5 +79,5 @@ try {
   await request(group[3], 'rematch'); await sleep(250);
   assert.equal(snapshot.state, 'countdown'); assert.equal(snapshot.round, 2);
   assert.ok(snapshot.players.every(p => p.hp === 100 && p.cd[0] === 0 && p.cd[1] === 0 && p.cd[2] === 0 && p.cd[3] === 0));
-  console.log(JSON.stringify({ ok: true, checks: ['full 4-player match','team elimination result','final snapshot sent once','events sent incrementally','3 ready players cannot restart','4th ready starts rematch','health and cooldown reset','new 2V2 teams'], matchSeconds: finishedTime }, null, 2));
+  console.log(JSON.stringify({ ok: true, checks: ['full 4-player match','team elimination result','final snapshot sent once','room-scoped reliable events and snapshots','3 ready players cannot restart','4th ready starts rematch','health and cooldown reset','new 2V2 teams'], matchSeconds: finishedTime }, null, 2));
 } finally { clients.forEach(c => c.disconnect()); }

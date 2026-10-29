@@ -26,6 +26,8 @@ export class Match {
     this.rayFrom = new CANNON.Vec3();
     this.rayTo = new CANNON.Vec3();
     this.rayResult = new CANNON.RaycastResult();
+    this.projectileFrom = { x: 0, y: 0, z: 0 };
+    this.hits = [];
     this.rayOptions = { collisionFilterMask: 3, skipBackfaces: true, checkCollisionResponse: false };
     this.sightRayOptions = { collisionFilterGroup: -1, collisionFilterMask: 1, skipBackfaces: true, checkCollisionResponse: false };
     this.world.defaultContactMaterial.friction = 0;
@@ -187,13 +189,15 @@ export class Match {
   }
 
   think(p, dt) {
-    const enemies = this.players.filter(x => x.team !== p.team && x.hp > 0);
-    if (!enemies.length) return;
     const pos = p.body.position;
-    enemies.sort((a, b) => distance(pos, a.body.position) - distance(pos, b.body.position));
-    const enemy = enemies[0];
+    let enemy = null, dist = Infinity;
+    for (const candidate of this.players) {
+      if (candidate.team === p.team || candidate.hp <= 0) continue;
+      const candidateDistance = distance(pos, candidate.body.position);
+      if (candidateDistance < dist) { enemy = candidate; dist = candidateDistance; }
+    }
+    if (!enemy) return;
     const ep = enemy.body.position;
-    const dist = distance(pos, ep);
     p.aim = { x: ep.x + enemy.move.x * 0.35, z: ep.z + enemy.move.z * 0.35 };
     if (this.time > p.nextThink) {
       p.nextThink = this.time + 0.35 + this.random() * 0.2;
@@ -303,9 +307,12 @@ export class Match {
       p.body.position.x = clamp(p.body.position.x, -BOUNDS.x + ARENA.radius, BOUNDS.x - ARENA.radius);
       p.body.position.z = clamp(p.body.position.z, -BOUNDS.z + ARENA.radius, BOUNDS.z - ARENA.radius);
     }
-    const hits = [];
-    this.projectiles = this.projectiles.filter(q => {
-      const old = { x: q.x, y: q.y, z: q.z };
+    const hits = this.hits;
+    hits.length = 0;
+    const from = this.projectileFrom;
+    let remaining = 0;
+    for (const q of this.projectiles) {
+      from.x = q.x; from.y = q.y; from.z = q.z;
       q.age += dt;
       const t = Math.min(1, q.age / q.duration);
       if (q.skill !== 3) {
@@ -316,7 +323,7 @@ export class Match {
         q.z = q.start.z + (q.target.z - q.start.z) * t;
         q.y = 1.1 * (1 - t) + 3.4 * 4 * t * (1 - t);
       }
-      const rayHit = this.ray(old, q, body => body.mass === 0 || (q.skill !== 3 && this.players.some(p => p.body === body && p.team !== q.team && p.hp > 0)));
+      const rayHit = this.ray(from, q, body => body.mass === 0 || (q.skill !== 3 && this.players.some(p => p.body === body && p.team !== q.team && p.hp > 0)));
       if (rayHit || t >= 1) {
         const point = rayHit ? rayHit.point : q;
         if (q.skill === 3) this.blast(q, point, hits);
@@ -329,11 +336,13 @@ export class Match {
             if (q.freeze && owner?.buff === 'freeze') { owner.buff = null; owner.buffUntil = 0; }
           }
         }
-        return false;
+        continue;
       }
-      return true;
-    });
+      this.projectiles[remaining++] = q;
+    }
+    this.projectiles.length = remaining;
     this.damage(hits);
+    hits.length = 0;
     if (!this.loot) {
       this.lootTimer -= dt;
       if (this.lootTimer <= 0) {
@@ -374,7 +383,7 @@ export class Match {
         facing: { ...p.lastMove }, aim: p.aim, cd: { ...p.cd }, kills: p.kills, damage: p.damage, ready: p.ready
       })),
       projectiles: this.projectiles.map(q => ({ id: q.id, skill: q.skill, team: q.team, owner: q.owner, x: q.x, y: q.y, z: q.z, dir: q.dir, powered: q.powered })),
-      events: afterEventId === null ? this.events.slice(-50) : this.events.filter(event => event.id > afterEventId)
+      events: afterEventId === null ? this.events.slice(-50) : afterEventId === this.seq ? [] : this.events.filter(event => event.id > afterEventId)
     };
   }
 }

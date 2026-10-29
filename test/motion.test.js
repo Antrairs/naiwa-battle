@@ -20,8 +20,25 @@ test('local movement responds before the next snapshot and keeps stopped heading
 test('remote movement is interpolated between authoritative samples', () => {
   const motion = new Motion();
   motion.push(snapshot(1), 1000, 'local'); motion.push(snapshot(1.1), 1100, 'local');
-  const result = motion.sample(1120, 1 / 60, 'local', { x: 0, z: 0 });
+  const result = motion.sample(1150, 1 / 60, 'local', { x: 0, z: 0 });
   assert.ok(Math.abs(result.players[1].x - 1.05 * ARENA.speed) < 0.0001);
+});
+
+test('remote movement remains frame-smooth at 90ms snapshot intervals', () => {
+  const motion = new Motion();
+  let previousX, maxStep = 0;
+  const sampleAt = now => {
+    const x = motion.sample(now, 1 / 60, 'local', { x: 0, z: 0 }).players[1].x;
+    if (previousX !== undefined) maxStep = Math.max(maxStep, Math.abs(x - previousX));
+    previousX = x;
+  };
+  for (let i = 0; i <= 20; i++) {
+    const arrival = 1000 + i * 90;
+    if (i) for (let now = arrival - 90 + 1000 / 60; now < arrival; now += 1000 / 60) sampleAt(now);
+    motion.push(snapshot(i * 0.09), arrival, 'local');
+    sampleAt(arrival);
+  }
+  assert.ok(maxStep <= ARENA.speed / 60 + 0.005, `largest frame step was ${maxStep}`);
 });
 
 test('prediction respects walls, players and expanded arena edges', () => {

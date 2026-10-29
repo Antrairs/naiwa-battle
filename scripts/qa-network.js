@@ -15,8 +15,7 @@ const next = (client, predicate) => new Promise((resolve, reject) => {
 });
 
 try {
-  const [a,b,c,d,outsider,slow] = await Promise.all(Array.from({ length: 6 }, connect));
-  for (const client of clients) if (client !== slow) client.on('snapshot', (_snapshot, ack) => ack?.());
+  const [a,b,c,d,outsider] = await Promise.all(Array.from({ length: 5 }, connect));
   const seenEvents = new Map(clients.map(client => [client.id, new Set()]));
   const eventRooms = new Map(clients.map(client => [client.id, new Set()]));
   const duplicateEvents = new Set();
@@ -81,20 +80,5 @@ try {
   assert.equal((await request(outsider, 'leave')).ok, true);
   assert.deepEqual([...duplicateEvents], []);
   assert.deepEqual(snapshotsWithEvents, []);
-  let slowSnapshots = 0, firstSlowAck, resolveFreshSnapshot;
-  const freshSnapshot = new Promise(resolve => { resolveFreshSnapshot = resolve; });
-  slow.on('snapshot', (snapshot, ack) => {
-    slowSnapshots++;
-    if (slowSnapshots === 1) firstSlowAck = ack;
-    else { ack?.(); resolveFreshSnapshot(snapshot); }
-  });
-  assert.equal((await request(slow, 'training', { name: '慢速客户端' })).ok, true);
-  await sleep(3500);
-  assert.equal(slowSnapshots, 1, 'an unacknowledged snapshot must not build a stale queue');
-  assert.equal(typeof firstSlowAck, 'function');
-  firstSlowAck();
-  const fresh = await Promise.race([freshSnapshot, sleep(3000).then(() => null)]);
-  assert.equal(fresh?.state, 'playing');
-  assert.equal(slowSnapshots, 2);
-  console.log(JSON.stringify({ ok: true, checks: ['4 digit code','4 player capacity','host start permission','2V2 teams','authoritative movement','cooldown rejection','isolated parallel room','3 training bots','paused snapshots stop','reliable room-scoped event channel','slow client receives coalesced current state','disconnect takeover','leave room and revoke skill access'], moved: Math.abs(moved.players.find(p => p.id === a.id).x - initial.x), room: created.room.code }, null, 2));
+  console.log(JSON.stringify({ ok: true, checks: ['4 digit code','4 player capacity','host start permission','2V2 teams','authoritative movement without snapshot ACKs','cooldown rejection','isolated parallel room','3 training bots','reliable pause transition','reliable room-scoped event channel','disconnect takeover','leave room and revoke skill access'], moved: Math.abs(moved.players.find(p => p.id === a.id).x - initial.x), room: created.room.code }, null, 2));
 } finally { clients.forEach(c => c.disconnect()); }

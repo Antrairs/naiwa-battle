@@ -42,7 +42,8 @@ export class Motion {
     if (!newest) return null;
     const latest = newest.snapshot;
     const active = latest.state === 'playing' && !latest.paused && now - newest.now < 300;
-    const time = latest.time + Math.min(0.1, (now - newest.now) / 1000) - 0.07;
+    const buffer = 0.1;
+    const time = latest.time + Math.min(buffer, (now - newest.now) / 1000) - buffer;
     let left = this.samples[0].snapshot, right = left;
     for (const sample of this.samples) {
       right = sample.snapshot;

@@ -39,15 +39,7 @@ function summary(room) {
     members: [...room.members.values()].map(p => ({ ...p })), max: 4 };
 }
 function lobby(room) { io.to(room.code).emit('room', summary(room)); }
-function sendSnapshot(socket, snapshot, reliable) {
-  if (socket.data.snapshotPending) {
-    if (reliable) socket.data.pendingSnapshot = snapshot;
-    return;
-  }
-  socket.data.snapshotPending = true;
-  socket.emit('snapshot', snapshot, socket.data.snapshotAck);
-}
-function broadcastSnapshot(room, reliable = false) {
+function broadcastSnapshot(room) {
   const snapshot = room.match.snapshot(room.lastEventSent);
   snapshot.room = room.code;
   room.lastEventSent = room.match.seq;
@@ -56,13 +48,12 @@ function broadcastSnapshot(room, reliable = false) {
   if (snapshot.state === 'result') room.resultSent = true;
   for (const player of room.members.values()) {
     const socket = io.sockets.sockets.get(player.id);
-    if (socket) sendSnapshot(socket, snapshot, reliable);
+    if (socket) (snapshot.state === 'result' || snapshot.paused ? socket : socket.volatile).emit('snapshot', snapshot);
   }
 }
 function leave(socket) {
   const room = rooms.get(socket.data.room);
   if (!room) return;
-  socket.data.pendingSnapshot = null;
   room.members.delete(socket.id);
   socket.leave(room.code); socket.data.room = null;
   if (room.training || ![...room.members.values()].some(p => !p.bot)) { rooms.delete(room.code); return; }
@@ -76,7 +67,7 @@ function leave(socket) {
   }
   if (room.host === socket.id) room.host = [...room.members.values()].find(p => !p.bot)?.id;
   lobby(room);
-  if (room.match?.state === 'result') broadcastSnapshot(room, true);
+  if (room.match?.state === 'result') broadcastSnapshot(room);
 }
 function start(room) {
   if (room.members.size !== 4 || (room.match && room.match.state !== 'result')) return;
@@ -86,7 +77,7 @@ function start(room) {
   room.lastEventSent = 0;
   room.resultSent = false;
   lobby(room);
-  broadcastSnapshot(room, true);
+  broadcastSnapshot(room);
 }
 function enter(socket, room) { socket.data.room = room.code; socket.join(room.code); }
 function create(socket, name, training) {
@@ -103,14 +94,6 @@ function create(socket, name, training) {
 function current(socket) { return rooms.get(socket.data.room); }
 
 io.on('connection', socket => {
-  socket.data.snapshotPending = false;
-  socket.data.snapshotAck = () => {
-    socket.data.snapshotPending = false;
-    const pending = socket.data.pendingSnapshot;
-    if (!pending) return;
-    socket.data.pendingSnapshot = null;
-    sendSnapshot(socket, pending, true);
-  };
   socket.on('latency', (_data, ack = () => {}) => ack({ ok: true }));
   socket.on('leave', (_data, ack = () => {}) => { leave(socket); ack({ ok: true }); });
   socket.on('training', (data = {}, ack = () => {}) => { const room = create(socket, data.name, true); ack({ ok: true, room: summary(room), playerId: socket.id }); });
@@ -158,7 +141,7 @@ io.on('connection', socket => {
       match.reset(true); room.resultSent = false; lobby(room);
     }
     ack({ ok: true });
-    broadcastSnapshot(room, true);
+    broadcastSnapshot(room);
   });
   socket.on('pause', (data = {}, ack = () => {}) => {
     const room = current(socket);
@@ -166,7 +149,7 @@ io.on('connection', socket => {
     const paused = !!data.paused;
     if (room.match.paused !== paused) {
       room.match.paused = paused;
-      broadcastSnapshot(room, true);
+      broadcastSnapshot(room);
     }
     ack({ ok: true });
   });
@@ -195,7 +178,7 @@ setInterval(() => {
     const match = room.match;
     if (!match || match.paused) continue;
     if (match.state === 'result') {
-      if (!room.resultSent) broadcastSnapshot(room, true);
+      if (!room.resultSent) broadcastSnapshot(room);
       continue;
     }
     broadcastSnapshot(room);

@@ -8,6 +8,14 @@ const fs = require('node:fs');
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto((process.env.QA_BASE_URL || 'http://localhost:4173') + '/?qa', { waitUntil: 'networkidle' });
   await page.waitForFunction(() => window.__arena?.state.snapshot?.state === 'playing');
+  const snapshots = await page.evaluate(async () => {
+    let count = 0; const record = () => count++;
+    __arena.socket.on('snapshot', record);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    __arena.socket.off('snapshot', record);
+    return count;
+  });
+  assert.ok(snapshots >= 40, `received ${snapshots} snapshots in 2s`);
   await page.keyboard.down('d');
   await page.waitForFunction(() => { const p = __arena.state.snapshot.players.find(p => p.id === __arena.state.localId); return p.vx > 1; });
   await page.waitForTimeout(350);

@@ -27,11 +27,10 @@ try {
       seenEvents.add(event.id);
     }
   });
-  group[0].on('snapshot', (s, ack) => {
+  group[0].on('snapshot', s => {
     snapshot = s;
     if (s.state === 'result') resultSnapshots++;
     if (s.events.length) snapshotsWithEvents = true;
-    ack();
   });
   const room = await request(group[0], 'create', { name: '流程一' });
   for (let i = 1; i < 4; i++) await request(group[i], 'join', { code: room.room.code, name: '流程' + (i + 1) });

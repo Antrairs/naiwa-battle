@@ -107,8 +107,8 @@ socket.on('room', room => {
 socket.on('events', packet => {
   if (packet.room === state.room?.code) pendingEvents.push(...packet.events);
 });
-socket.on('snapshot', (snapshot, ack) => {
-  if (state.screen === 'home' || snapshot.room !== state.room?.code) { ack?.(); return; }
+socket.on('snapshot', snapshot => {
+  if (state.screen === 'home' || snapshot.room !== state.room?.code) return;
   snapshot.events = pendingEvents.splice(0);
   if (state.screen === 'friends' && !snapshot.training) enterBattle();
   const roundChanged = snapshot.round !== state.lastRound;
@@ -133,7 +133,6 @@ socket.on('snapshot', (snapshot, ack) => {
     handleEvent(event, snapshot);
   }
   if (snapshot.state === 'result' && !state.resultShown) showResult();
-  ack?.();
 });
 
 function handleEvent(event, snapshot) {

@@ -39,6 +39,12 @@ function summary(room) {
     members: [...room.members.values()].map(p => ({ ...p })), max: 4 };
 }
 function lobby(room) { io.to(room.code).emit('room', summary(room)); }
+function broadcastSnapshot(room) {
+  const snapshot = room.match.snapshot(room.lastEventSent);
+  room.lastEventSent = room.match.seq;
+  if (snapshot.state === 'result') room.resultSent = true;
+  io.to(room.code).emit('snapshot', snapshot);
+}
 function leave(socket) {
   const room = rooms.get(socket.data.room);
   if (!room) return;
@@ -55,19 +61,22 @@ function leave(socket) {
   }
   if (room.host === socket.id) room.host = [...room.members.values()].find(p => !p.bot)?.id;
   lobby(room);
+  if (room.match?.state === 'result') broadcastSnapshot(room);
 }
 function start(room) {
   if (room.members.size !== 4 || (room.match && room.match.state !== 'result')) return;
   const members = [...room.members.values()];
   if (!room.training) for (let i = members.length - 1; i > 0; i--) { const j = randomInt(i + 1); [members[i], members[j]] = [members[j], members[i]]; }
   room.match = new Match(members, { training: room.training });
+  room.lastEventSent = 0;
+  room.resultSent = false;
   lobby(room);
-  io.to(room.code).emit('snapshot', room.match.snapshot());
+  broadcastSnapshot(room);
 }
 function enter(socket, room) { socket.data.room = room.code; socket.join(room.code); }
 function create(socket, name, training) {
   leave(socket);
-  const room = { code: code(), host: socket.id, training, members: new Map(), match: null };
+  const room = { code: code(), host: socket.id, training, members: new Map(), match: null, lastEventSent: 0, resultSent: false };
   room.members.set(socket.id, { id: socket.id, name: cleanName(name), bot: false });
   rooms.set(room.code, room); enter(socket, room);
   if (training) {
@@ -123,15 +132,19 @@ io.on('connection', socket => {
     const p = match.players.find(p => p.id === socket.id);
     if (p) p.ready = true;
     if (match.players.every(p => p.bot || p.ready)) {
-      match.reset(true); lobby(room);
+      match.reset(true); room.resultSent = false; lobby(room);
     }
     ack({ ok: true });
-    io.to(room.code).emit('snapshot', match.snapshot());
+    broadcastSnapshot(room);
   });
   socket.on('pause', (data = {}, ack = () => {}) => {
     const room = current(socket);
     if (!room?.training || !room.match) return ack({ ok: false, error: '联机对局会继续进行' });
-    room.match.paused = !!data.paused;
+    const paused = !!data.paused;
+    if (room.match.paused !== paused) {
+      room.match.paused = paused;
+      broadcastSnapshot(room);
+    }
     ack({ ok: true });
   });
   socket.on('disconnect', () => leave(socket));
@@ -145,17 +158,26 @@ setInterval(() => {
   previousTick = now;
   let updated = false;
   while (accumulator >= STEP) {
-    for (const room of rooms.values()) room.match?.step(STEP);
+    for (const room of rooms.values()) {
+      const match = room.match;
+      if (!match || match.paused || match.state === 'result') continue;
+      match.step(STEP);
+    }
     accumulator -= STEP;
     tick++;
     if (tick % 2 === 0) updated = true;
   }
   if (!updated) return;
   for (const room of rooms.values()) {
-    if (!room.match) continue;
-    io.to(room.code).emit('snapshot', room.match.snapshot());
+    const match = room.match;
+    if (!match || match.paused) continue;
+    if (match.state === 'result') {
+      if (!room.resultSent) broadcastSnapshot(room);
+      continue;
+    }
+    broadcastSnapshot(room);
   }
-}, 1000 / 120);
+}, 1000 / 60);
 server.listen(port, '0.0.0.0', () => {
   console.log('BOMBO Carnival Arena: http://localhost:' + port);
   for (const n of Object.values(os.networkInterfaces()).flat()) if (n?.family === 'IPv4' && !n.internal) console.log('LAN: http://' + n.address + ':' + port);

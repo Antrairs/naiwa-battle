@@ -192,6 +192,14 @@ test('rematch restores health, shields, cooldowns, and a legal spawn', () => {
   assert.equal(match.state, 'countdown');
 });
 
+test('bot sight is blocked by walls but ignores players', () => {
+  const match = new Match(members);
+  assert.equal(match.sight({ x: -11, z: -2.75 }, { x: -7, z: -2.75 }), false);
+  assert.equal(match.sight({ x: -1, z: 0 }, { x: 1, z: 0 }), true);
+  match.players[0].body.position.set(0, 0.45, 0);
+  assert.equal(match.sight({ x: -1, z: 0 }, { x: 1, z: 0 }), true);
+});
+
 test('the maze navigation grid connects every spawn to the center', () => {
   const match = new Match(members);
   for (const p of match.players) {

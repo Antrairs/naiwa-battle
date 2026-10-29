@@ -7,12 +7,27 @@ const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 const unit = (x, z) => { const len = Math.hypot(x, z); return len > 0.0001 ? { x: x / len, z: z / len } : { x: 0, z: -1 }; };
 const finite = (n, fallback = 0) => Number.isFinite(n) ? n : fallback;
 const { cellSize } = NAV;
+const blockedAt = (x, z, radius = ARENA.radius) => {
+  if (Math.abs(x) > BOUNDS.x - radius || Math.abs(z) > BOUNDS.z - radius) return true;
+  return WALLS.some(w => Math.abs(x - w.x) < w.w / 2 + radius && Math.abs(z - w.z) < w.d / 2 + radius);
+};
+// Pathfinding mutates grids, so callers must search on clones of this shared base.
+const NAV_GRID = new PF.Grid(NAV.cols, NAV.rows);
+for (let z = 0; z < NAV.rows; z++) for (let x = 0; x < NAV.cols; x++) {
+  NAV_GRID.setWalkableAt(x, z, !blockedAt(x * cellSize - BOUNDS.x, z * cellSize - BOUNDS.z, ARENA.radius + 0.07));
+}
+
 
 export class Match {
   constructor(members, { training = false, random = Math.random } = {}) {
     this.training = training;
     this.random = random;
     this.world = new CANNON.World({ gravity: new CANNON.Vec3(0, 0, 0) });
+    this.rayFrom = new CANNON.Vec3();
+    this.rayTo = new CANNON.Vec3();
+    this.rayResult = new CANNON.RaycastResult();
+    this.rayOptions = { collisionFilterMask: 3, skipBackfaces: true, checkCollisionResponse: false };
+    this.sightRayOptions = { collisionFilterGroup: -1, collisionFilterMask: 1, skipBackfaces: true, checkCollisionResponse: false };
     this.world.defaultContactMaterial.friction = 0;
     this.world.defaultContactMaterial.restitution = 0;
     this.world.solver.iterations = 12;
@@ -34,10 +49,7 @@ export class Match {
       body.position.set(w.x, w.h / 2, w.z);
       this.world.addBody(body);
     }
-    this.nav = new PF.Grid(NAV.cols, NAV.rows);
-    for (let z = 0; z < NAV.rows; z++) for (let x = 0; x < NAV.cols; x++) {
-      this.nav.setWalkableAt(x, z, !this.blocked(x * cellSize - BOUNDS.x, z * cellSize - BOUNDS.z, ARENA.radius + 0.07));
-    }
+    this.nav = NAV_GRID;
     this.finder = new PF.AStarFinder({ allowDiagonal: true, dontCrossCorners: true });
     members.forEach((m, i) => {
       const body = new CANNON.Body({ mass: 1, fixedRotation: true, linearDamping: 0, collisionFilterGroup: 2, collisionFilterMask: 3 });
@@ -118,22 +130,24 @@ export class Match {
   }
 
   blocked(x, z, radius = ARENA.radius) {
-    if (Math.abs(x) > BOUNDS.x - radius || Math.abs(z) > BOUNDS.z - radius) return true;
-    return WALLS.some(w => Math.abs(x - w.x) < w.w / 2 + radius && Math.abs(z - w.z) < w.d / 2 + radius);
+    return blockedAt(x, z, radius);
   }
 
   ray(from, to, filter) {
     let closest = null;
-    this.world.raycastAll(new CANNON.Vec3(from.x, from.y, from.z), new CANNON.Vec3(to.x, to.y, to.z),
-      { collisionFilterMask: 3, skipBackfaces: true, checkCollisionResponse: false }, result => {
-        if (filter && !filter(result.body)) return;
-        if (!closest || result.distance < closest.distance) closest = { distance: result.distance, point: { ...result.hitPointWorld }, body: result.body };
-      });
+    this.rayFrom.set(from.x, from.y, from.z);
+    this.rayTo.set(to.x, to.y, to.z);
+    this.world.raycastAll(this.rayFrom, this.rayTo, this.rayOptions, result => {
+      if (filter && !filter(result.body)) return;
+      if (!closest || result.distance < closest.distance) closest = { distance: result.distance, point: { ...result.hitPointWorld }, body: result.body };
+    });
     return closest;
   }
 
   sight(a, b) {
-    return !this.ray({ x: a.x, y: 0.65, z: a.z }, { x: b.x, y: 0.65, z: b.z }, body => body.mass === 0);
+    this.rayFrom.set(a.x, 0.65, a.z);
+    this.rayTo.set(b.x, 0.65, b.z);
+    return !this.world.raycastAny(this.rayFrom, this.rayTo, this.sightRayOptions, this.rayResult);
   }
 
   dash(p, target) {
@@ -349,7 +363,7 @@ export class Match {
     }
   }
 
-  snapshot() {
+  snapshot(afterEventId = null) {
     return {
       state: this.state, round: this.round, time: this.time, countdown: this.countdown, paused: this.paused,
       training: this.training, winner: this.winner, reason: this.reason, loot: this.loot, lootTimer: this.lootTimer,
@@ -360,7 +374,7 @@ export class Match {
         facing: { ...p.lastMove }, aim: p.aim, cd: { ...p.cd }, kills: p.kills, damage: p.damage, ready: p.ready
       })),
       projectiles: this.projectiles.map(q => ({ id: q.id, skill: q.skill, team: q.team, owner: q.owner, x: q.x, y: q.y, z: q.z, dir: q.dir, powered: q.powered })),
-      events: this.events.slice(-50)
+      events: afterEventId === null ? this.events.slice(-50) : this.events.filter(event => event.id > afterEventId)
     };
   }
 }

@@ -7,6 +7,7 @@ const connect = () => new Promise((resolve, reject) => {
   clients.push(client); client.once('connect', () => resolve(client)); client.once('connect_error', reject);
 });
 const request = (client, event, data = {}) => new Promise((resolve, reject) => client.timeout(5000).emit(event, data, (error, response) => error ? reject(error) : resolve(response)));
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const next = (client, predicate) => new Promise((resolve, reject) => {
   const timer = setTimeout(() => { client.off('snapshot', listener); reject(new Error('Snapshot timeout')); }, 12000);
   const listener = snapshot => { if (predicate(snapshot)) { clearTimeout(timer); client.off('snapshot', listener); resolve(snapshot); } };
@@ -15,6 +16,17 @@ const next = (client, predicate) => new Promise((resolve, reject) => {
 
 try {
   const [a,b,c,d,outsider] = await Promise.all(Array.from({ length: 5 }, connect));
+  const seenEvents = new Map(clients.map(client => [client.id, new Set()]));
+  const duplicateEvents = new Set();
+  const trainingSnapshots = [];
+  for (const client of clients) client.on('snapshot', snapshot => {
+    if (client === outsider) trainingSnapshots.push(snapshot);
+    const seen = seenEvents.get(client.id);
+    for (const event of snapshot.events) {
+      if (seen.has(event.id)) duplicateEvents.add(`${client.id}:${event.id}`);
+      seen.add(event.id);
+    }
+  });
   const created = await request(a, 'create', { name: '甲' });
   assert.equal(created.ok, true); assert.match(created.room.code, /^\d{4}$/);
   for (const [client,name] of [[b,'乙'],[c,'丙'],[d,'丁']]) assert.equal((await request(client, 'join', { name, code: created.room.code })).ok, true);
@@ -36,6 +48,14 @@ try {
   const training = await next(outsider, s => s.state === 'playing');
   assert.equal(training.players.filter(p => p.bot).length, 3);
   assert.ok(!training.players.some(p => p.id === a.id));
+  const pausedSnapshot = next(outsider, snapshot => snapshot.paused);
+  assert.equal((await request(outsider, 'pause', { paused: true })).ok, true);
+  await pausedSnapshot;
+  await sleep(180);
+  assert.equal(trainingSnapshots.filter(snapshot => snapshot.paused).length, 1);
+  const resumedSnapshot = next(outsider, snapshot => !snapshot.paused);
+  assert.equal((await request(outsider, 'pause', { paused: false })).ok, true);
+  await resumedSnapshot;
   c.disconnect();
   const replaced = await next(a, s => s.players.some(p => p.bot));
   assert.equal(replaced.players.length, 4);
@@ -44,5 +64,6 @@ try {
   await left;
   assert.equal((await request(b, 'skill', { skill: 0, target: { x: 0, z: 0 } })).ok, false);
   assert.equal((await request(outsider, 'leave')).ok, true);
-  console.log(JSON.stringify({ ok: true, checks: ['4 digit code','4 player capacity','host start permission','2V2 teams','authoritative movement','cooldown rejection','isolated parallel room','3 training bots','disconnect takeover','leave room and revoke skill access'], moved: Math.abs(moved.players.find(p => p.id === a.id).x - initial.x), room: created.room.code }, null, 2));
+  assert.deepEqual([...duplicateEvents], []);
+  console.log(JSON.stringify({ ok: true, checks: ['4 digit code','4 player capacity','host start permission','2V2 teams','authoritative movement','cooldown rejection','isolated parallel room','3 training bots','paused snapshots stop','snapshot events are incremental','disconnect takeover','leave room and revoke skill access'], moved: Math.abs(moved.players.find(p => p.id === a.id).x - initial.x), room: created.room.code }, null, 2));
 } finally { clients.forEach(c => c.disconnect()); }
